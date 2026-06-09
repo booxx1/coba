@@ -1,0 +1,635 @@
+<!-- 
+  ====================================================================
+  APLIKASI PEMBAYARAN SPP - FRONTEND BLOGGER
+  Gunakan kode ini di dalam Mode HTML pada Halaman/Page Blogger Anda.
+  ====================================================================
+-->
+
+<!-- SEO Thumbnail & Meta -->
+<meta name="title" content="Portal Pembayaran SPP Sekolah">
+<meta name="description" content="Sistem Informasi Pengecekan dan Pembayaran SPP Terintegrasi.">
+<meta property="og:image" content="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=800&q=80">
+
+<!-- Frameworks & Libraries -->
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- CSS Khusus Full-Page Blogger -->
+<style>
+  /* Menyembunyikan elemen default Blogger agar tampil full-page layaknya WebApp mandiri */
+  header, footer, .sidebar, .comments, .post-title, .post-header, .post-footer, #header-wrapper, #footer-wrapper, .widget { 
+    display: none !important; 
+  }
+  .post-body, .post, #Blog1, .main-inner, .column-center-inner, body { 
+    margin: 0 !important; 
+    padding: 0 !important; 
+    width: 100% !important; 
+    max-width: 100% !important; 
+    border: none !important;
+  }
+  body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; }
+  .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+  .fade-in { animation: fadeIn 0.4s ease-in-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  
+  /* Loading Spinner */
+  .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
+<!-- ROOT APLIKASI -->
+<div id="app-root" class="min-h-screen flex flex-col text-gray-800">
+  
+  <!-- NAVBAR GLOBAL -->
+  <nav class="bg-blue-600 text-white shadow-lg p-4 flex justify-between items-center z-10 relative">
+    <div class="flex items-center gap-2 text-xl font-bold">
+      <i class="fas fa-graduation-cap"></i>
+      <span>EduPay SPP</span>
+    </div>
+    <div id="nav-actions">
+      <!-- Tombol Home/Logout di-inject via JS -->
+    </div>
+  </nav>
+
+  <!-- CONTAINER KONTEN UTAMA -->
+  <main id="main-content" class="flex-grow flex items-center justify-center p-4">
+    <!-- Konten akan dirender di sini oleh JavaScript -->
+  </main>
+</div>
+
+<!-- LOGIKA APLIKASI UTAMA (ES6+) -->
+<script>
+  /**
+   * =========================================
+   * KONFIGURASI UTAMA
+   * =========================================
+   */
+  const IS_PREVIEW = true; // UBAH KE FALSE JIKA SUDAH DEPLOY GOOGLE APPS SCRIPT
+  const SCRIPT_URL = "URL_WEBAPP_GAS_ANDA_MASUKKAN_DISINI"; 
+  
+  // State Aplikasi
+  const state = {
+    view: 'portal', // portal, login_admin, portal_siswa, dashboard_admin
+    user: null,
+    adminMenu: 'siswa', // siswa, transaksi, laporan
+    dataSiswa: [],
+    dataTransaksi: []
+  };
+
+  const BULAN_SPP = ['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'];
+
+  /**
+   * =========================================
+   * SIMULASI DATABASE (UNTUK MODE PREVIEW)
+   * =========================================
+   */
+  let dummyDB = {
+    siswa: [
+      { nisn: '1234501', nama: 'Ahmad Budi', kelas: 'X-A', tahun: '2025/2026', nominal: 150000 },
+      { nisn: '1234502', nama: 'Siti Sarah', kelas: 'X-B', tahun: '2025/2026', nominal: 150000 }
+    ],
+    transaksi: [
+      { id: 'TRX-1', tgl: '2026-07-05', nisn: '1234501', bulan: 'Juli', nominal: 150000, admin: 'admin' },
+      { id: 'TRX-2', tgl: '2026-08-10', nisn: '1234501', bulan: 'Agustus', nominal: 150000, admin: 'admin' }
+    ]
+  };
+
+  /**
+   * =========================================
+   * CORE API / FETCH LOGIC
+   * =========================================
+   */
+  async function apiCall(action, payload = {}) {
+    if (IS_PREVIEW) {
+      console.log(`[PREVIEW MODE] Action: ${action}`, payload);
+      return new Promise(resolve => {
+        setTimeout(() => {
+          if (action === 'login') {
+            if (payload.username === 'admin' && (payload.password === 'admin2026' || payload.password === 'visualsukses')) {
+              resolve({ success: true, message: 'Login Berhasil' });
+            } else {
+              resolve({ success: false, message: 'Username / Password salah' });
+            }
+          }
+          else if (action === 'getSiswaByNISN') {
+            const siswa = dummyDB.siswa.find(s => s.nisn === payload.nisn);
+            if (siswa) {
+              const trx = dummyDB.transaksi.filter(t => t.nisn === payload.nisn);
+              resolve({ success: true, siswa: siswa, transaksi: trx });
+            } else {
+              resolve({ success: false, message: 'Data siswa tidak ditemukan' });
+            }
+          }
+          else if (action === 'getSemuaSiswa') resolve({ success: true, data: dummyDB.siswa });
+          else if (action === 'getLaporan') resolve({ success: true, data: dummyDB.transaksi });
+          else if (action === 'tambahSiswa') {
+            dummyDB.siswa.push(payload);
+            resolve({ success: true, message: 'Siswa berhasil ditambahkan' });
+          }
+          else if (action === 'hapusSiswa') {
+            dummyDB.siswa = dummyDB.siswa.filter(s => s.nisn !== payload.nisn);
+            resolve({ success: true, message: 'Siswa berhasil dihapus' });
+          }
+          else if (action === 'tambahTransaksi') {
+            payload.id = 'TRX-' + Math.floor(Math.random() * 1000);
+            payload.tgl = new Date().toISOString().split('T')[0];
+            payload.admin = state.user || 'admin';
+            dummyDB.transaksi.push(payload);
+            resolve({ success: true, message: 'Transaksi berhasil disimpan' });
+          }
+        }, 800); // Simulasi delay jaringan
+      });
+    }
+
+    // REAL PRODUCTION LOGIC MENGGUNAKAN GAS
+    try {
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: action, payload: payload })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error(error);
+      return { success: false, message: 'Gagal terhubung ke server.' };
+    }
+  }
+
+  /**
+   * =========================================
+   * SISTEM RENDER UI
+   * =========================================
+   */
+  const elMain = document.getElementById('main-content');
+  const elNavActions = document.getElementById('nav-actions');
+
+  function renderApp() {
+    elMain.innerHTML = '';
+    
+    // Tombol Navigasi Kanan
+    if (state.view === 'portal') {
+      elNavActions.innerHTML = `<span class="text-sm bg-blue-700 px-3 py-1 rounded-full"><i class="fas fa-globe"></i> Publik</span>`;
+    } else {
+      elNavActions.innerHTML = `
+        <button onclick="changeView('portal'); state.user = null;" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+          <i class="fas fa-sign-out-alt"></i> ${state.user ? 'Logout' : 'Kembali'}
+        </button>
+      `;
+    }
+
+    // Render Konten Sesuai State
+    switch (state.view) {
+      case 'portal': renderPortal(); break;
+      case 'login_admin': renderLoginAdmin(); break;
+      case 'portal_siswa': renderPortalSiswa(); break;
+      case 'dashboard_admin': renderDashboardAdmin(); break;
+    }
+  }
+
+  function changeView(newView) {
+    state.view = newView;
+    renderApp();
+  }
+
+  /**
+   * =========================================
+   * VIEW 1: PORTAL (PILIHAN PERAN)
+   * =========================================
+   */
+  function renderPortal() {
+    const html = `
+      <div class="glass-panel p-8 rounded-2xl shadow-xl w-full max-w-md text-center fade-in">
+        <h1 class="text-3xl font-extrabold text-blue-700 mb-2">Selamat Datang</h1>
+        <p class="text-gray-500 mb-8">Silakan pilih akses layanan pembayaran SPP</p>
+        
+        <div class="space-y-4">
+          <button onclick="changeView('portal_siswa')" class="w-full flex items-center justify-between p-4 border-2 border-blue-200 hover:border-blue-500 hover:bg-blue-50 rounded-xl transition-all cursor-pointer group">
+            <div class="flex items-center gap-4">
+              <div class="bg-blue-100 text-blue-600 p-3 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <i class="fas fa-user-graduate text-xl"></i>
+              </div>
+              <div class="text-left">
+                <h3 class="font-bold text-gray-800">Cek Tagihan Siswa</h3>
+                <p class="text-xs text-gray-500">Cek status SPP menggunakan NISN</p>
+              </div>
+            </div>
+            <i class="fas fa-chevron-right text-gray-400 group-hover:text-blue-500"></i>
+          </button>
+
+          <button onclick="changeView('login_admin')" class="w-full flex items-center justify-between p-4 border-2 border-gray-200 hover:border-gray-500 hover:bg-gray-50 rounded-xl transition-all cursor-pointer group">
+            <div class="flex items-center gap-4">
+              <div class="bg-gray-100 text-gray-600 p-3 rounded-lg group-hover:bg-gray-600 group-hover:text-white transition-colors">
+                <i class="fas fa-user-shield text-xl"></i>
+              </div>
+              <div class="text-left">
+                <h3 class="font-bold text-gray-800">Login Admin</h3>
+                <p class="text-xs text-gray-500">Pengelolaan data & transaksi</p>
+              </div>
+            </div>
+            <i class="fas fa-chevron-right text-gray-400 group-hover:text-gray-500"></i>
+          </button>
+        </div>
+        
+        ${IS_PREVIEW ? `<div class="mt-6 text-xs text-red-500 font-semibold"><i class="fas fa-exclamation-circle"></i> Mode Preview Aktif</div>` : ''}
+      </div>
+    `;
+    elMain.innerHTML = html;
+  }
+
+  /**
+   * =========================================
+   * VIEW 2: LOGIN ADMIN
+   * =========================================
+   */
+  function renderLoginAdmin() {
+    const html = `
+      <div class="glass-panel p-8 rounded-2xl shadow-xl w-full max-w-sm fade-in">
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+            <i class="fas fa-lock"></i>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-800">Admin Login</h2>
+        </div>
+        <form id="form-login" onsubmit="handleLogin(event)">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <input type="text" id="username" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+          <button type="submit" id="btn-login" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2">
+            <span>Masuk</span>
+          </button>
+        </form>
+      </div>
+    `;
+    elMain.innerHTML = html;
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-login');
+    btn.innerHTML = `<div class="loader"></div>`;
+    btn.disabled = true;
+
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+
+    const res = await apiCall('login', { username: u, password: p });
+    if (res.success) {
+      state.user = u;
+      Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1500, showConfirmButton: false });
+      changeView('dashboard_admin');
+    } else {
+      Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: res.message });
+      btn.innerHTML = `<span>Masuk</span>`;
+      btn.disabled = false;
+    }
+  }
+
+  /**
+   * =========================================
+   * VIEW 3: PORTAL SISWA (CEK TAGIHAN)
+   * =========================================
+   */
+  function renderPortalSiswa() {
+    const html = `
+      <div class="w-full max-w-4xl fade-in flex flex-col gap-6">
+        <!-- Pencarian -->
+        <div class="glass-panel p-6 rounded-2xl shadow-lg flex flex-col md:flex-row gap-4 items-center">
+          <div class="flex-grow w-full">
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Masukkan Nomor Induk Siswa Nasional (NISN)</label>
+            <div class="flex gap-2">
+              <input type="text" id="nisn-search" placeholder="Contoh: 1234501" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg">
+              <button onclick="cariDataSiswa()" id="btn-cari" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                <i class="fas fa-search"></i> <span class="hidden md:inline">Cari</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hasil Pencarian (Awalnya Kosong) -->
+        <div id="hasil-pencarian" class="hidden flex flex-col gap-6"></div>
+      </div>
+    `;
+    elMain.innerHTML = html;
+  }
+
+  async function cariDataSiswa() {
+    const nisn = document.getElementById('nisn-search').value;
+    if (!nisn) return Swal.fire('Perhatian', 'Harap masukkan NISN', 'warning');
+
+    const btn = document.getElementById('btn-cari');
+    btn.innerHTML = `<div class="loader"></div>`;
+    
+    const res = await apiCall('getSiswaByNISN', { nisn: nisn });
+    btn.innerHTML = `<i class="fas fa-search"></i> <span class="hidden md:inline">Cari</span>`;
+
+    const container = document.getElementById('hasil-pencarian');
+    
+    if (res.success) {
+      const siswa = res.siswa;
+      const bayar = res.transaksi.map(t => t.bulan); // Array bulan yg sudah dibayar
+
+      let gridBulanan = '';
+      BULAN_SPP.forEach(bulan => {
+        const isLunas = bayar.includes(bulan);
+        gridBulanan += `
+          <div class="border rounded-xl p-4 text-center flex flex-col justify-center items-center gap-2 ${isLunas ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}">
+            <h4 class="font-bold text-gray-800">${bulan}</h4>
+            ${isLunas 
+              ? `<span class="bg-green-500 text-white text-xs px-3 py-1 rounded-full font-semibold"><i class="fas fa-check-circle"></i> LUNAS</span>`
+              : `<span class="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-semibold"><i class="fas fa-times-circle"></i> BELUM</span>`
+            }
+          </div>
+        `;
+      });
+
+      container.innerHTML = `
+        <!-- Info Profil -->
+        <div class="glass-panel p-6 rounded-2xl shadow-lg border-l-4 border-blue-500 flex items-center gap-6 fade-in">
+          <div class="bg-blue-100 text-blue-600 p-4 rounded-full text-3xl"><i class="fas fa-user"></i></div>
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">${siswa.nama}</h2>
+            <p class="text-gray-600 font-medium">NISN: ${siswa.nisn} | Kelas: ${siswa.kelas}</p>
+            <p class="text-sm text-gray-500">Tahun Ajaran: ${siswa.tahun} | Tagihan: Rp ${parseInt(siswa.nominal).toLocaleString('id-ID')}/bln</p>
+          </div>
+        </div>
+
+        <!-- Status SPP -->
+        <div class="glass-panel p-6 rounded-2xl shadow-lg fade-in">
+          <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Status Pembayaran SPP</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            ${gridBulanan}
+          </div>
+        </div>
+      `;
+      container.classList.remove('hidden');
+    } else {
+      container.innerHTML = '';
+      container.classList.add('hidden');
+      Swal.fire('Tidak Ditemukan', res.message, 'error');
+    }
+  }
+
+  /**
+   * =========================================
+   * VIEW 4: DASHBOARD ADMIN
+   * =========================================
+   */
+  async function renderDashboardAdmin() {
+    elMain.classList.remove('items-center');
+    elMain.classList.add('items-start');
+
+    const html = `
+      <div class="w-full max-w-6xl fade-in flex flex-col md:flex-row gap-6 mt-4">
+        <!-- Sidebar Menu -->
+        <div class="w-full md:w-64 glass-panel rounded-2xl shadow-lg p-4 h-max flex flex-col gap-2">
+          <div class="text-center pb-4 mb-4 border-b">
+            <div class="w-12 h-12 bg-blue-600 text-white rounded-full mx-auto flex items-center justify-center text-xl mb-2"><i class="fas fa-user-shield"></i></div>
+            <h3 class="font-bold text-gray-800">Hi, ${state.user}</h3>
+          </div>
+          <button onclick="setAdminMenu('siswa')" class="${state.adminMenu === 'siswa' ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-bold' : 'text-gray-600 hover:bg-gray-50'} w-full text-left px-4 py-3 rounded-r-lg transition-all flex items-center gap-3">
+            <i class="fas fa-users w-5 text-center"></i> Data Siswa
+          </button>
+          <button onclick="setAdminMenu('transaksi')" class="${state.adminMenu === 'transaksi' ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-bold' : 'text-gray-600 hover:bg-gray-50'} w-full text-left px-4 py-3 rounded-r-lg transition-all flex items-center gap-3">
+            <i class="fas fa-money-bill-wave w-5 text-center"></i> Input Pembayaran
+          </button>
+          <button onclick="setAdminMenu('laporan')" class="${state.adminMenu === 'laporan' ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-bold' : 'text-gray-600 hover:bg-gray-50'} w-full text-left px-4 py-3 rounded-r-lg transition-all flex items-center gap-3">
+            <i class="fas fa-file-invoice-dollar w-5 text-center"></i> Laporan
+          </button>
+        </div>
+
+        <!-- Konten Dashboard -->
+        <div id="admin-content" class="flex-grow glass-panel rounded-2xl shadow-lg p-6 min-h-[500px]">
+          <div class="flex justify-center items-center h-full"><div class="loader"></div></div>
+        </div>
+      </div>
+    `;
+    elMain.innerHTML = html;
+    loadAdminMenuData();
+  }
+
+  function setAdminMenu(menu) {
+    state.adminMenu = menu;
+    renderDashboardAdmin();
+  }
+
+  async function loadAdminMenuData() {
+    const content = document.getElementById('admin-content');
+    
+    if (state.adminMenu === 'siswa') {
+      const res = await apiCall('getSemuaSiswa');
+      if(res.success) {
+        state.dataSiswa = res.data;
+        renderTabelSiswa(content);
+      }
+    } 
+    else if (state.adminMenu === 'transaksi') {
+      const resSiswa = await apiCall('getSemuaSiswa'); // Butuh data siswa untuk dropdown
+      if(resSiswa.success) state.dataSiswa = resSiswa.data;
+      renderFormTransaksi(content);
+    }
+    else if (state.adminMenu === 'laporan') {
+      const res = await apiCall('getLaporan');
+      if(res.success) {
+        state.dataTransaksi = res.data;
+        renderTabelLaporan(content);
+      }
+    }
+  }
+
+  // --- SUB-VIEW: DATA SISWA ---
+  function renderTabelSiswa(container) {
+    let trs = state.dataSiswa.map(s => `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="p-3">${s.nisn}</td>
+        <td class="p-3 font-semibold text-gray-800">${s.nama}</td>
+        <td class="p-3">${s.kelas}</td>
+        <td class="p-3">Rp ${parseInt(s.nominal).toLocaleString('id-ID')}</td>
+        <td class="p-3 text-center">
+          <button onclick="hapusSiswa('${s.nisn}')" class="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-lg"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold text-gray-800">Manajemen Data Siswa</h2>
+        <button onclick="bukaModalSiswa()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700"><i class="fas fa-plus"></i> Tambah Siswa</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-gray-100 text-gray-600 text-sm">
+              <th class="p-3 rounded-tl-lg">NISN</th>
+              <th class="p-3">Nama Siswa</th>
+              <th class="p-3">Kelas</th>
+              <th class="p-3">Tagihan SPP/Bln</th>
+              <th class="p-3 text-center rounded-tr-lg">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>${trs.length ? trs : '<tr><td colspan="5" class="text-center p-6 text-gray-500">Belum ada data siswa</td></tr>'}</tbody>
+        </table>
+      </div>
+
+      <!-- Modal Tambah Siswa -->
+      <div id="modal-siswa" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md">
+          <h3 class="text-lg font-bold mb-4">Tambah Data Siswa</h3>
+          <form onsubmit="simpanSiswa(event)" class="space-y-4">
+            <div><label class="text-sm">NISN</label><input type="text" id="ms-nisn" required class="w-full border p-2 rounded-lg mt-1"></div>
+            <div><label class="text-sm">Nama Lengkap</label><input type="text" id="ms-nama" required class="w-full border p-2 rounded-lg mt-1"></div>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="text-sm">Kelas</label><input type="text" id="ms-kelas" required class="w-full border p-2 rounded-lg mt-1"></div>
+              <div><label class="text-sm">Tahun Ajaran</label><input type="text" id="ms-tahun" required value="2025/2026" class="w-full border p-2 rounded-lg mt-1"></div>
+            </div>
+            <div><label class="text-sm">Nominal SPP (Rp)</label><input type="number" id="ms-nominal" required class="w-full border p-2 rounded-lg mt-1"></div>
+            <div class="flex gap-2 justify-end mt-6">
+              <button type="button" onclick="document.getElementById('modal-siswa').classList.replace('flex','hidden')" class="px-4 py-2 bg-gray-200 rounded-lg">Batal</button>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Simpan</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
+  function bukaModalSiswa() {
+    const m = document.getElementById('modal-siswa');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  async function simpanSiswa(e) {
+    e.preventDefault();
+    const payload = {
+      nisn: document.getElementById('ms-nisn').value,
+      nama: document.getElementById('ms-nama').value,
+      kelas: document.getElementById('ms-kelas').value,
+      tahun: document.getElementById('ms-tahun').value,
+      nominal: document.getElementById('ms-nominal').value
+    };
+    const res = await apiCall('tambahSiswa', payload);
+    if(res.success) {
+      Swal.fire('Berhasil', res.message, 'success');
+      loadAdminMenuData(); // reload tabel
+    }
+  }
+
+  async function hapusSiswa(nisn) {
+    if(confirm('Yakin hapus data siswa NISN: ' + nisn + '?')) {
+      const res = await apiCall('hapusSiswa', { nisn: nisn });
+      if(res.success) {
+        Swal.fire('Terhapus', res.message, 'success');
+        loadAdminMenuData();
+      }
+    }
+  }
+
+  // --- SUB-VIEW: INPUT TRANSAKSI ---
+  function renderFormTransaksi(container) {
+    let options = state.dataSiswa.map(s => `<option value="${s.nisn}">${s.nisn} - ${s.nama} (${s.kelas})</option>`).join('');
+    let optBulan = BULAN_SPP.map(b => `<option value="${b}">${b}</option>`).join('');
+
+    container.innerHTML = `
+      <h2 class="text-xl font-bold text-gray-800 mb-6">Input Pembayaran SPP</h2>
+      <div class="max-w-xl">
+        <form onsubmit="simpanTransaksi(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Pilih Siswa</label>
+            <select id="trx-nisn" required class="w-full border p-3 rounded-lg bg-gray-50 focus:bg-white" onchange="autoFillNominal(this.value)">
+              <option value="">-- Pilih Siswa --</option>
+              ${options}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Pembayaran Untuk Bulan</label>
+            <select id="trx-bulan" required class="w-full border p-3 rounded-lg bg-gray-50 focus:bg-white">
+              <option value="">-- Pilih Bulan --</option>
+              ${optBulan}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Nominal (Rp)</label>
+            <input type="number" id="trx-nominal" required class="w-full border p-3 rounded-lg bg-gray-50 focus:bg-white">
+          </div>
+          <button type="submit" id="btn-simpan-trx" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg mt-4 flex justify-center items-center">
+            <i class="fas fa-save mr-2"></i> Simpan Pembayaran
+          </button>
+        </form>
+      </div>
+    `;
+  }
+
+  function autoFillNominal(nisn) {
+    if(!nisn) return;
+    const siswa = state.dataSiswa.find(s => s.nisn === nisn);
+    if(siswa) document.getElementById('trx-nominal').value = siswa.nominal;
+  }
+
+  async function simpanTransaksi(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-simpan-trx');
+    const oriText = btn.innerHTML;
+    btn.innerHTML = `<div class="loader"></div>`;
+    
+    const payload = {
+      nisn: document.getElementById('trx-nisn').value,
+      bulan: document.getElementById('trx-bulan').value,
+      nominal: document.getElementById('trx-nominal').value
+    };
+
+    const res = await apiCall('tambahTransaksi', payload);
+    if(res.success) {
+      Swal.fire('Berhasil', res.message, 'success');
+      document.getElementById('trx-bulan').value = ''; // reset form
+      btn.innerHTML = oriText;
+    }
+  }
+
+  // --- SUB-VIEW: LAPORAN ---
+  function renderTabelLaporan(container) {
+    let trs = state.dataTransaksi.map(t => `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="p-3 text-xs text-gray-500">${t.id}<br>${t.tgl}</td>
+        <td class="p-3 font-semibold text-gray-800">${t.nisn}</td>
+        <td class="p-3"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">${t.bulan}</span></td>
+        <td class="p-3 font-bold text-green-600">Rp ${parseInt(t.nominal).toLocaleString('id-ID')}</td>
+        <td class="p-3 text-xs text-gray-500">${t.admin}</td>
+      </tr>
+    `).join('');
+
+    // Hitung total
+    const total = state.dataTransaksi.reduce((sum, t) => sum + parseInt(t.nominal), 0);
+
+    container.innerHTML = `
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold text-gray-800">Laporan Pemasukan SPP</h2>
+        <div class="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-bold">
+          Total: Rp ${total.toLocaleString('id-ID')}
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-gray-100 text-gray-600 text-sm">
+              <th class="p-3 rounded-tl-lg">ID & Tanggal</th>
+              <th class="p-3">NISN Siswa</th>
+              <th class="p-3">Pembayaran Bulan</th>
+              <th class="p-3">Nominal Masuk</th>
+              <th class="p-3 rounded-tr-lg">Admin</th>
+            </tr>
+          </thead>
+          <tbody>${trs.length ? trs : '<tr><td colspan="5" class="text-center p-6 text-gray-500">Belum ada transaksi</td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Inisialisasi Aplikasi
+  renderApp();
+</script>
